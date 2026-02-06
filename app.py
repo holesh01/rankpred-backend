@@ -5,6 +5,7 @@ import shutil
 import re
 from bs4 import BeautifulSoup
 from openpyxl import Workbook, load_workbook
+import requests
 
 app = Flask(__name__)
 CORS(app)
@@ -164,14 +165,79 @@ def read_subjects(exam_name):
     return subjects
 
 
+
 # ---------------- PARSE RESPONSE ----------------
-def parse_response_sectionwise(html_path, scheme, subjects):
+# def parse_response_sectionwise(html_path, scheme, subjects):
+#     section_map = {}
+#     section_order = []
+#     current_section = None
+
+#     with open(html_path, "r", encoding="utf-8", errors="ignore") as f:
+#         soup = BeautifulSoup(f, "lxml")
+
+#     for el in soup.find_all("div"):
+#         if el.get("class") == ["section-lbl"]:
+#             current_section = el.get_text(strip=True)
+#             if current_section not in section_map:
+#                 section_map[current_section] = {"c": 0, "w": 0, "n": 0}
+#                 section_order.append(current_section)
+
+#         if el.get("class") == ["question-pnl"] and current_section:
+#             chosen = None
+#             correct_option = None
+
+#             chosen_row = el.find("td", string=re.compile("Chosen Option"))
+#             if chosen_row:
+#                 v = chosen_row.find_next_sibling("td").get_text(strip=True)
+#                 if v != "--":
+#                     chosen = int(v)
+
+#             right_td = el.find("td", class_="rightAns")
+#             if right_td:
+#                 m = re.search(r"(\d)\.", right_td.get_text())
+#                 if m:
+#                     correct_option = int(m.group(1))
+
+#             if chosen is None:
+#                 section_map[current_section]["n"] += 1
+#             elif chosen == correct_option:
+#                 section_map[current_section]["c"] += 1
+#             else:
+#                 section_map[current_section]["w"] += 1
+
+#     subject_results = []
+#     final_marks = 0
+
+#     for idx, sec in enumerate(section_order):
+#         c = section_map[sec]["c"]
+#         w = section_map[sec]["w"]
+#         n = section_map[sec]["n"]
+
+#         marks = (
+#             c * scheme["Correct"]
+#             + w * scheme["Wrong"]
+#             + n * scheme["NA"]
+#         )
+
+#         sub = subjects[idx]
+
+#         subject_results.append({
+#             "name": sub["name"],
+#             "marks": marks,
+#             "count_in_total": sub["count_in_total"]
+#         })
+
+#         if sub["count_in_total"]:
+#             final_marks += marks
+
+#     return final_marks, subject_results
+
+def parse_response_sectionwise_from_html(html_content, scheme, subjects):
     section_map = {}
     section_order = []
     current_section = None
 
-    with open(html_path, "r", encoding="utf-8", errors="ignore") as f:
-        soup = BeautifulSoup(f, "lxml")
+    soup = BeautifulSoup(html_content, "lxml")
 
     for el in soup.find_all("div"):
         if el.get("class") == ["section-lbl"]:
@@ -230,7 +296,6 @@ def parse_response_sectionwise(html_path, scheme, subjects):
 
     return final_marks, subject_results
 
-
 # ---------------- SAVE RESULT ----------------
 def save_user_result(exam_name, base_data, subject_results):
     path = os.path.join(BASE_DIR, safe_name(exam_name), "responses.xlsx")
@@ -267,9 +332,11 @@ def evaluate_exam():
     scheme = read_marking_scheme(exam_name)
     subjects = read_subjects(exam_name)
 
-    final_marks, subject_results = parse_response_sectionwise(
-        upload_path, scheme, subjects
-    )
+    with open(upload_path, "r", encoding="utf-8", errors="ignore") as f:html_content = f.read()
+
+    final_marks, subject_results = parse_response_sectionwise_from_html(html_content, scheme, subjects
+)
+
 
     save_user_result(
         exam_name,
@@ -278,6 +345,97 @@ def evaluate_exam():
     )
 
     return jsonify({"status": "saved", "final_marks": final_marks})
+@app.route("/evaluate-from-url", methods=["POST"])
+def evaluate_exam_from_url():
+    data = request.json
+
+    exam_name = data.get("exam_name")
+    category = data.get("category")
+    gender = data.get("gender")
+    state = data.get("state")
+    url = data.get("url")
+
+    if not all([exam_name, category, gender, state, url]):
+        return jsonify({"error": "Missing fields"}), 400
+
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers, timeout=20)
+
+        if response.status_code != 200:
+            return jsonify({"error": "Unable to fetch DigiALM page"}), 400
+
+        html_content = response.text
+
+        # 🔥 AUTO-EXTRACT DETAILS
+        details = extract_candidate_details(html_content)
+
+        if not details["roll"] or not details["name"]:
+            return jsonify({"error": "Unable to extract candidate details"}), 400
+
+        scheme = read_marking_scheme(exam_name)
+        subjects = read_subjects(exam_name)
+
+        final_marks, subject_results = parse_response_sectionwise_from_html(
+            html_content, scheme, subjects
+        )
+
+        save_user_result(
+            exam_name,
+            [
+                details["name"],
+                details["roll"],
+                category,
+                gender,
+                state,
+                final_marks
+            ],
+            subject_results
+        )
+
+        return jsonify({
+            "status": "saved",
+            "final_marks": final_marks,
+            "candidate": details
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+def extract_candidate_details(html_content):
+    soup = BeautifulSoup(html_content, "lxml")
+
+    details = {
+        "roll": None,
+        "name": None,
+        "venue": None,
+        "exam_date": None,
+        "exam_time": None,
+        "subject": None
+    }
+
+    # DigiALM header table
+    for row in soup.select("table tr"):
+        cells = [c.get_text(strip=True) for c in row.find_all("td")]
+        if len(cells) != 2:
+            continue
+
+        key, value = cells
+
+        if "Roll Number" in key:
+            details["roll"] = value
+        elif "Candidate Name" in key:
+            details["name"] = value
+        elif "Venue Name" in key:
+            details["venue"] = value
+        elif "Exam Date" in key:
+            details["exam_date"] = value
+        elif "Exam Time" in key:
+            details["exam_time"] = value
+        elif "Subject" in key:
+            details["subject"] = value
+
+    return details
 
 
 # ---------------- RESULT API ----------------

@@ -24,6 +24,8 @@ def home():
 
 def safe_name(name):
     return name.replace(" ", "_")
+
+
 # ---------------- ADMIN: LIST EXAMS ----------------
 @app.route("/admin/exams", methods=["GET"])
 def admin_list_exams():
@@ -62,9 +64,13 @@ def create_exam():
     correct = data.get("correct")
     wrong = data.get("wrong")
     na = data.get("na")
+    subjects = data.get("subjects", [])
 
     if not exam_name:
         return jsonify({"error": "exam_name required"}), 400
+
+    if not subjects:
+        return jsonify({"error": "subjects required"}), 400
 
     exam_dir = os.path.join(BASE_DIR, safe_name(exam_name))
     os.makedirs(exam_dir, exist_ok=True)
@@ -81,34 +87,54 @@ def create_exam():
     ws.append(["NA", na])
     wb.save(scheme_path)
 
+    # ---- subjects.xlsx ----
+    subjects_path = os.path.join(exam_dir, "subjects.xlsx")
+    wb_sub = Workbook()
+    ws_sub = wb_sub.active
+    ws_sub.title = "subjects"
+    ws_sub.append(["Subject Name", "Max Marks", "Count In Total"])
+
+    for sub in subjects:
+        ws_sub.append([
+            sub["name"],
+            sub["max_marks"],
+            "YES" if sub["count_in_total"] else "NO"
+        ])
+
+    wb_sub.save(subjects_path)
+
     # ---- responses.xlsx ----
     response_path = os.path.join(exam_dir, "responses.xlsx")
     wb2 = Workbook()
     ws2 = wb2.active
     ws2.title = "responses"
-    ws2.append([
-        "Name", "Roll", "Category", "Gender", "State",
-        "Total Marks"
-    ])
+
+    header = ["Name", "Roll", "Category", "Gender", "State", "Final Marks"]
+    for sub in subjects:
+        header.append(sub["name"])
+
+    ws2.append(header)
     wb2.save(response_path)
 
     return jsonify({"status": "success", "exam": exam_name})
+
 
 # ---------------- ADMIN: DELETE EXAM ----------------
 @app.route("/admin/delete-exam", methods=["POST"])
 def delete_exam():
     data = request.json
-    if not data or "exam_name" not in data:
+    exam_name = data.get("exam_name")
+
+    if not exam_name:
         return jsonify({"error": "exam_name required"}), 400
 
-    exam_name = data["exam_name"]
     exam_dir = os.path.join(BASE_DIR, safe_name(exam_name))
-
     if not os.path.exists(exam_dir):
         return jsonify({"error": "exam not found"}), 404
 
     shutil.rmtree(exam_dir)
-    return jsonify({"status": "deleted", "exam": exam_name})
+    return jsonify({"status": "deleted"})
+
 
 # ---------------- READ MARKING SCHEME ----------------
 def read_marking_scheme(exam_name):
@@ -122,8 +148,24 @@ def read_marking_scheme(exam_name):
     return scheme
 
 
-# ---------------- PARSE SECTION-WISE RESPONSE ----------------
-def parse_response_sectionwise(html_path, scheme):
+# ---------------- READ SUBJECT CONFIG ----------------
+def read_subjects(exam_name):
+    path = os.path.join(BASE_DIR, safe_name(exam_name), "subjects.xlsx")
+    wb = load_workbook(path)
+    ws = wb.active
+
+    subjects = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        subjects.append({
+            "name": row[0],
+            "max_marks": row[1],
+            "count_in_total": True if row[2] == "YES" else False
+        })
+    return subjects
+
+
+# ---------------- PARSE RESPONSE ----------------
+def parse_response_sectionwise(html_path, scheme, subjects):
     section_map = {}
     section_order = []
     current_section = None
@@ -135,11 +177,7 @@ def parse_response_sectionwise(html_path, scheme):
         if el.get("class") == ["section-lbl"]:
             current_section = el.get_text(strip=True)
             if current_section not in section_map:
-                section_map[current_section] = {
-                    "correct": 0,
-                    "wrong": 0,
-                    "na": 0
-                }
+                section_map[current_section] = {"c": 0, "w": 0, "n": 0}
                 section_order.append(current_section)
 
         if el.get("class") == ["question-pnl"] and current_section:
@@ -159,21 +197,19 @@ def parse_response_sectionwise(html_path, scheme):
                     correct_option = int(m.group(1))
 
             if chosen is None:
-                section_map[current_section]["na"] += 1
+                section_map[current_section]["n"] += 1
             elif chosen == correct_option:
-                section_map[current_section]["correct"] += 1
+                section_map[current_section]["c"] += 1
             else:
-                section_map[current_section]["wrong"] += 1
+                section_map[current_section]["w"] += 1
 
-    subject_marks = []
-    subject_stats = []
-    total_marks = 0
+    subject_results = []
+    final_marks = 0
 
-    for sec in section_order:
-        c = section_map[sec]["correct"]
-        w = section_map[sec]["wrong"]
-        n = section_map[sec]["na"]
-        attempt = c + w
+    for idx, sec in enumerate(section_order):
+        c = section_map[sec]["c"]
+        w = section_map[sec]["w"]
+        n = section_map[sec]["n"]
 
         marks = (
             c * scheme["Correct"]
@@ -181,54 +217,33 @@ def parse_response_sectionwise(html_path, scheme):
             + n * scheme["NA"]
         )
 
-        subject_marks.append(marks)
-        subject_stats.append({
-            "attempt": attempt,
-            "right": c,
-            "wrong": w,
-            "na": n
+        sub = subjects[idx]
+
+        subject_results.append({
+            "name": sub["name"],
+            "marks": marks,
+            "count_in_total": sub["count_in_total"]
         })
 
-        total_marks += marks
+        if sub["count_in_total"]:
+            final_marks += marks
 
-    return total_marks, subject_marks, subject_stats
+    return final_marks, subject_results
 
 
-# ---------------- SAVE RESULT (BACKWARD COMPATIBLE) ----------------
-def save_user_result(exam_name, base_data, subject_marks, subject_stats):
+# ---------------- SAVE RESULT ----------------
+def save_user_result(exam_name, base_data, subject_results):
     path = os.path.join(BASE_DIR, safe_name(exam_name), "responses.xlsx")
     wb = load_workbook(path)
     ws = wb.active
 
     headers = [c.value for c in ws[1]]
 
-    # ---- ensure Subject N (old behavior) ----
-    for i in range(len(subject_marks)):
-        col_name = f"Subject {i+1}"
-        if col_name not in headers:
-            ws.cell(row=1, column=len(headers) + 1, value=col_name)
-            headers.append(col_name)
+    row = base_data[:]
+    for sub in subject_results:
+        row.append(sub["marks"])
 
-    # ---- append base + marks (unchanged behavior) ----
-    ws.append(base_data + subject_marks)
-    current_row = ws.max_row
-
-    # ---- OPTIONAL stats (new behavior) ----
-    for i, stats in enumerate(subject_stats):
-        base = f"S{i+1}"
-        mapping = {
-            f"{base}_Attempt": stats["attempt"],
-            f"{base}_R": stats["right"],
-            f"{base}_W": stats["wrong"],
-            f"{base}_NA": stats["na"]
-        }
-
-        for h, v in mapping.items():
-            if h not in headers:
-                ws.cell(row=1, column=len(headers) + 1, value=h)
-                headers.append(h)
-            ws.cell(row=current_row, column=headers.index(h) + 1, value=v)
-
+    ws.append(row)
     wb.save(path)
 
 
@@ -250,22 +265,22 @@ def evaluate_exam():
     file.save(upload_path)
 
     scheme = read_marking_scheme(exam_name)
+    subjects = read_subjects(exam_name)
 
-    total_marks, subject_marks, subject_stats = parse_response_sectionwise(
-        upload_path, scheme
+    final_marks, subject_results = parse_response_sectionwise(
+        upload_path, scheme, subjects
     )
 
     save_user_result(
         exam_name,
-        [name, roll, category, gender, state, total_marks],
-        subject_marks,
-        subject_stats
+        [name, roll, category, gender, state, final_marks],
+        subject_results
     )
 
-    return jsonify({"status": "saved"})
+    return jsonify({"status": "saved", "final_marks": final_marks})
 
 
-# ---------------- RESULT (SMART FALLBACK) ----------------
+# ---------------- RESULT API ----------------
 @app.route("/result")
 def get_result():
     exam = request.args.get("exam")
@@ -274,9 +289,9 @@ def get_result():
     if not exam or not roll:
         return jsonify({"error": "Missing exam or roll"}), 400
 
-    path = os.path.join(BASE_DIR, exam, "responses.xlsx")
+    path = os.path.join(BASE_DIR, safe_name(exam), "responses.xlsx")
     if not os.path.exists(path):
-        return jsonify({"error": "Result file not found"}), 404
+        return jsonify({"error": "Result not found"}), 404
 
     wb = load_workbook(path)
     ws = wb.active
@@ -292,33 +307,21 @@ def get_result():
     if not row:
         return jsonify({"error": "Candidate not found"}), 404
 
-    subjects = []
-    overall = {"attempt": 0, "right": 0, "wrong": 0, "na": 0, "marks": 0}
+    subjects_cfg = read_subjects(exam)
 
-    i = 1
-    while f"Subject {i}" in headers:
-        def safe(h):
-            return row[col[h]] if h in col and row[col[h]] is not None else "-"
+    counted = []
+    qualifying = []
+    final_marks = 0
 
-        marks = row[col[f"Subject {i}"]]
+    for sub in subjects_cfg:
+        marks = row[col[sub["name"]]]
+        item = {"name": sub["name"], "marks": marks}
 
-        subjects.append({
-            "name": f"Subject {i}",
-            "attempt": safe(f"S{i}_Attempt"),
-            "right": safe(f"S{i}_R"),
-            "wrong": safe(f"S{i}_W"),
-            "na": safe(f"S{i}_NA"),
-            "marks": marks
-        })
-
-        if isinstance(safe(f"S{i}_Attempt"), int):
-            overall["attempt"] += safe(f"S{i}_Attempt")
-            overall["right"] += safe(f"S{i}_R")
-            overall["wrong"] += safe(f"S{i}_W")
-            overall["na"] += safe(f"S{i}_NA")
-
-        overall["marks"] += marks
-        i += 1
+        if sub["count_in_total"]:
+            counted.append(item)
+            final_marks += marks
+        else:
+            qualifying.append(item)
 
     return jsonify({
         "exam": exam,
@@ -329,8 +332,9 @@ def get_result():
             "gender": row[col["Gender"]],
             "state": row[col["State"]]
         },
-        "subjects": subjects,
-        "overall": overall
+        "counted_subjects": counted,
+        "qualifying_subjects": qualifying,
+        "final_marks": final_marks
     })
 
 

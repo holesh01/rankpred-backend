@@ -8,7 +8,6 @@ const params = new URLSearchParams(window.location.search);
 const exam = params.get("exam");
 const roll = params.get("roll");
 
-// If URL params missing
 if (!exam || !roll) {
   statusMsg.textContent = "Result details not provided.";
 } else {
@@ -34,39 +33,48 @@ if (!exam || !roll) {
       document.getElementById("rRoll").textContent =
         data.candidate.roll;
 
-      // ---------- SUBJECT TABLE ----------
-      const tbody = document.getElementById("subjectTableBody");
-      tbody.innerHTML = "";
+      document.getElementById("rCategory").textContent =
+        data.candidate.category;
 
-      data.subjects.forEach(sub => {
+      document.getElementById("rState").textContent =
+        data.candidate.state;
+
+      // ---------- COUNTED SUBJECTS ----------
+      const countedBody = document.getElementById("countedTableBody");
+      countedBody.innerHTML = "";
+
+      data.counted_subjects.forEach(sub => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${sub.name}</td>
-          <td>${sub.attempt}</td>
-          <td>${sub.na}</td>
-          <td>${sub.right}</td>
-          <td>${sub.wrong}</td>
           <td>${sub.marks}</td>
         `;
-        tbody.appendChild(tr);
+        countedBody.appendChild(tr);
       });
 
-      // ---------- OVERALL ROW ----------
-      const overall = document.createElement("tr");
-      overall.style.background = "#6366f1";
-      overall.style.color = "white";
-      overall.style.fontWeight = "bold";
+      // ---------- FINAL MARKS ----------
+      document.getElementById("finalMarks").textContent =
+        data.final_marks;
 
-      overall.innerHTML = `
-        <td>Overall</td>
-        <td>${data.overall.attempt}</td>
-        <td>${data.overall.na}</td>
-        <td>${data.overall.right}</td>
-        <td>${data.overall.wrong}</td>
-        <td>${data.overall.marks}</td>
-      `;
+      // ---------- QUALIFYING SUBJECTS ----------
+      const qualifyingSection = document.getElementById("qualifyingSection");
+      const qualBody = document.getElementById("qualifyingTableBody");
+      qualBody.innerHTML = "";
 
-      tbody.appendChild(overall);
+      if (data.qualifying_subjects.length > 0) {
+        qualifyingSection.style.display = "block";
+
+        data.qualifying_subjects.forEach(sub => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${sub.name}</td>
+            <td>${sub.marks}</td>
+          `;
+          qualBody.appendChild(tr);
+        });
+      } else {
+        qualifyingSection.style.display = "none";
+      }
     })
     .catch(err => {
       console.error(err);

@@ -1,35 +1,3 @@
-<!-- <!DOCTYPE html>
-<html>
-<head>
-  <title>Result | RankPred</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-
-<header>
-  <h1>RankPred</h1>
-</header>
-
-<div class="container">
-  <h2>Result Page</h2>
-
-  <p style="text-align:center;font-size:18px;">
-    ✅ Welcome to Result Page
-  </p>
-
-  <div class="btn-row">
-    <button class="secondary" onclick="goHome()">Home</button>
-  </div>
-</div>
-
-<script>
-  function goHome() {
-    window.location.href = "index.html";
-  }
-</script>
-
-</body>
-</html> -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -48,35 +16,57 @@
     Loading result...
   </p>
 
-  <!-- HEADER INFO -->
+  <!-- CANDIDATE INFO -->
   <div class="candidate-card">
     <h2 id="examName"></h2>
     <p><strong>Name:</strong> <span id="rName"></span></p>
     <p><strong>Roll No:</strong> <span id="rRoll"></span></p>
+    <p><strong>Category:</strong> <span id="rCategory"></span></p>
+    <p><strong>State:</strong> <span id="rState"></span></p>
   </div>
 
-  <!-- SUBJECT TABLE -->
-  <h2 style="text-align:center;">Subject Wise Marks Details</h2>
+  <!-- COUNTED SUBJECTS -->
+  <h2 style="text-align:center;margin-top:30px;">
+    Subjects Counted in Final Score
+  </h2>
 
   <table class="subject-table">
     <thead>
       <tr>
         <th>Subject</th>
-        <th>Attempt</th>
-        <th>NA</th>
-        <th>R</th>
-        <th>W</th>
         <th>Marks</th>
       </tr>
     </thead>
-    <tbody id="subjectTableBody"></tbody>
+    <tbody id="countedTableBody"></tbody>
   </table>
-  <div class="btn-row">
-  <button class="secondary" onclick="goHome()">Home</button>
-</div>
+
+  <!-- FINAL MARKS -->
+  <h2 style="text-align:center;margin-top:20px;">
+    Final Marks: <span id="finalMarks"></span>
+  </h2>
+
+  <!-- QUALIFYING SUBJECTS (HIDDEN IF NONE) -->
+  <div id="qualifyingSection" style="display:none;">
+    <h2 style="text-align:center;margin-top:30px;">
+      Qualifying Subjects
+    </h2>
+
+    <table class="subject-table">
+      <thead>
+        <tr>
+          <th>Subject</th>
+          <th>Marks</th>
+        </tr>
+      </thead>
+      <tbody id="qualifyingTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="btn-row" style="margin-top:30px;">
+    <button class="secondary" onclick="goHome()">Home</button>
+  </div>
 
 </div>
-
 
 <script src="result.js"></script>
 </body>

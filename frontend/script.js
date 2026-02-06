@@ -105,3 +105,32 @@ async function submitEvaluation() {
 
 
 }
+const subjects = [];
+
+document.querySelectorAll("#subjectTable tbody tr").forEach(row => {
+  const name = row.querySelector(".sub-name").value;
+  const maxMarks = parseInt(row.querySelector(".sub-marks").value);
+  const countInTotal = row.querySelector(".sub-count").checked;
+
+  subjects.push({
+    name: name,
+    max_marks: maxMarks,
+    count_in_total: countInTotal
+  });
+});
+
+function addSubjectRow() {
+  const table = document.querySelector("#subjectTable tbody");
+
+  const row = document.createElement("tr");
+  row.innerHTML = `
+        <td><input type="text" class="sub-name" placeholder="e.g. Computer" required></td>
+        <td><input type="number" class="sub-marks" placeholder="50" required></td>
+        <td style="text-align:center">
+          <input type="checkbox" class="sub-count" checked>
+        </td>
+        <td>
+          <button onclick="this.closest('tr').remove()">Remove</button>
+        </td>`;
+  table.appendChild(row);
+}

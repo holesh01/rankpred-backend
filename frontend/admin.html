@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,7 +29,27 @@
   <label>Marks for NA</label>
   <input type="number" id="na" value="0">
 
-  <div class="btn-row">
+  <!-- SUBJECT SECTION -->
+  <h3>Add Subjects</h3>
+
+  <table border="1" width="100%" id="subjectTable">
+    <thead>
+      <tr>
+        <th>Subject Name</th>
+        <th>Max Marks</th>
+        <th>Count in Total</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Rows added dynamically -->
+    </tbody>
+  </table>
+
+  <br>
+  <button type="button" onclick="addSubjectRow()">+ Add Subject</button>
+
+  <div class="btn-row" style="margin-top:20px;">
     <button class="primary" onclick="createExam()">Create Exam</button>
     <button class="secondary" onclick="location.reload()">Admin Home</button>
   </div>
@@ -61,19 +79,62 @@
 <script>
 const API_BASE = "http://127.0.0.1:5000";
 
+/* ---------- ADD SUBJECT ROW ---------- */
+function addSubjectRow() {
+  const tbody = document.querySelector("#subjectTable tbody");
+
+  const row = document.createElement("tr");
+  row.innerHTML = `
+    <td>
+      <input type="text" class="sub-name" placeholder="Subject name" required>
+    </td>
+    <td>
+      <input type="number" class="sub-marks" placeholder="50" required>
+    </td>
+    <td style="text-align:center">
+      <input type="checkbox" class="sub-count" checked>
+    </td>
+    <td>
+      <button type="button" onclick="this.closest('tr').remove()">Remove</button>
+    </td>
+  `;
+
+  tbody.appendChild(row);
+}
+
 /* ---------- CREATE EXAM ---------- */
 async function createExam() {
-  const payload = {
-    exam_name: document.getElementById("examName").value.trim(),
-    correct: Number(document.getElementById("correct").value),
-    wrong: Number(document.getElementById("wrong").value),
-    na: Number(document.getElementById("na").value)
-  };
+  const exam_name = document.getElementById("examName").value.trim();
+  const correct = Number(document.getElementById("correct").value);
+  const wrong = Number(document.getElementById("wrong").value);
+  const na = Number(document.getElementById("na").value);
 
-  if (!payload.exam_name) {
+  if (!exam_name) {
     alert("Exam name required");
     return;
   }
+
+  const subjects = [];
+  document.querySelectorAll("#subjectTable tbody tr").forEach(row => {
+    subjects.push({
+      name: row.querySelector(".sub-name").value.trim(),
+      max_marks: Number(row.querySelector(".sub-marks").value),
+      count_in_total: row.querySelector(".sub-count").checked
+    });
+  });
+
+  if (subjects.length === 0) {
+    alert("Add at least one subject");
+    return;
+  }
+
+  const payload = {
+    exam_name,
+    correct,
+    wrong,
+    na,
+    subjects
+  };
 
   const res = await fetch(API_BASE + "/admin/create-exam", {
     method: "POST",
@@ -111,10 +172,9 @@ async function loadExams() {
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>${exam.exam_name}</td>
-        <td>${exam.correct ?? "-"}</td>
-        <td>${exam.wrong ?? "-"}</td>
-        <td>${exam.na ?? "-"}</td>
-
+      <td>${exam.correct ?? "-"}</td>
+      <td>${exam.wrong ?? "-"}</td>
+      <td>${exam.na ?? "-"}</td>
       <td>
         <button class="secondary"
           onclick="deleteExam('${exam.exam_name}')">

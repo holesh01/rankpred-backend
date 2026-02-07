@@ -1,2 +1,5 @@
-flask
-pdfplumber
+Flask
+flask-cors
+gunicorn
+beautifulsoup4
+openpyxl

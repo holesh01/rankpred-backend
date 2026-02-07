@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
     title.textContent = exam + " Evaluation";
   }
 });
+const API_BASE = "https://rankpred-backend-1.onrender.com";
 
 // ---------------- SUBMIT EVALUATION ----------------
 async function submitEvaluation() {
@@ -53,14 +54,14 @@ async function submitEvaluation() {
       formData.append("state", state);
       formData.append("file", fileInput.files[0]);
 
-      res = await fetch("http://127.0.0.1:5000/evaluate", {
+      res = await fetch(`${API_BASE}/evaluate-from-url`, {
         method: "POST",
         body: formData
       });
 
     // ---------------- URL FLOW (PRIMARY) ----------------
     } else {
-      res = await fetch("http://127.0.0.1:5000/evaluate-from-url", {
+      res = await fetch(`${API_BASE}/evaluate-from-url`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

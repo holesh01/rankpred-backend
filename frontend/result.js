@@ -4,6 +4,9 @@ function goHome() {
 
 const statusMsg = document.getElementById("statusMsg");
 
+// ✅ LIVE BACKEND
+const API_BASE = "https://rankpred-backend-1.onrender.com";
+
 const params = new URLSearchParams(window.location.search);
 const exam = params.get("exam");
 const roll = params.get("roll");
@@ -12,7 +15,7 @@ if (!exam || !roll) {
   statusMsg.textContent = "Result details not provided.";
 } else {
   fetch(
-    `http://127.0.0.1:5000/result?exam=${encodeURIComponent(exam)}&roll=${encodeURIComponent(roll)}`
+    `${API_BASE}/result?exam=${encodeURIComponent(exam)}&roll=${encodeURIComponent(roll)}`
   )
     .then(res => res.json())
     .then(data => {
@@ -110,6 +113,7 @@ if (!exam || !roll) {
     });
 }
 
+// ---------- PDF DOWNLOAD ----------
 function downloadPDF() {
   const params = new URLSearchParams(window.location.search);
   const exam = params.get("exam");
@@ -121,7 +125,7 @@ function downloadPDF() {
   }
 
   window.open(
-    `http://127.0.0.1:5000/result-pdf?exam=${encodeURIComponent(exam)}&roll=${encodeURIComponent(roll)}`,
+    `${API_BASE}/result-pdf?exam=${encodeURIComponent(exam)}&roll=${encodeURIComponent(roll)}`,
     "_blank"
   );
 }

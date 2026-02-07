@@ -17,12 +17,14 @@
 </div>
 
 <script>
+const API_BASE = "https://rankpred-backend-1.onrender.com";
+
 function goToEvaluate(examName) {
   localStorage.setItem("selectedExam", examName);
   window.location.href = "evaluate.html";
 }
 
-fetch("http://127.0.0.1:5000/admin/exams")
+fetch(`${API_BASE}/admin/exams`)
   .then(res => res.json())
   .then(exams => {
     const grid = document.getElementById("examGrid");
@@ -37,10 +39,9 @@ fetch("http://127.0.0.1:5000/admin/exams")
       const card = document.createElement("div");
       card.className = "exam-card";
 
-      // ✅ FIX HERE
       card.textContent = exam.exam_name;
-
       card.onclick = () => goToEvaluate(exam.exam_name);
+
       grid.appendChild(card);
     });
   })
@@ -49,6 +50,7 @@ fetch("http://127.0.0.1:5000/admin/exams")
       "<p>Failed to load exams</p>";
   });
 </script>
+
 
 </body>
 </html>

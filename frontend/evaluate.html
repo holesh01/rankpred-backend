@@ -71,12 +71,73 @@
  
 
   <br><br>
-  <button type="button" onclick="submitEvaluation()">Evaluate</button>
+  <button onclick="evaluateFromClient()">Evaluate</button>
 
   <p id="status"></p>
 
 </div>
 
-<script src="script.js"></script>
+<script>
+const API_BASE = "https://rankpred-backend-1.onrender.com";
+
+async function evaluateFromClient() {
+  const url = document.getElementById("responseUrl").value.trim();
+  const exam_name = localStorage.getItem("selectedExam");
+  const category = document.getElementById("category").value;
+  const gender = document.getElementById("gender").value;
+  const state = document.getElementById("state").value;
+
+  if (!url) {
+    alert("Paste DigiALM response sheet URL");
+    return;
+  }
+
+  try {
+    // ✅ FETCH DIGIALM FROM USER BROWSER (IMPORTANT)
+    const res = await fetch(url, {
+      credentials: "include" // must be logged in
+    });
+
+    if (!res.ok) {
+      throw new Error("Fetch blocked");
+    }
+
+    const html = await res.text();
+
+    // ✅ SEND RAW HTML TO BACKEND
+    const apiRes = await fetch(`${API_BASE}/evaluate-html`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        exam_name,
+        category,
+        gender,
+        state,
+        html
+      })
+    });
+
+    const data = await apiRes.json();
+
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+
+    // redirect to result page
+    window.location.href =
+      `result.html?exam=${encodeURIComponent(exam_name)}&roll=${encodeURIComponent(data.roll)}`;
+
+  } catch (err) {
+    alert(
+      "Unable to fetch DigiALM page.\n\n" +
+      "Make sure:\n" +
+      "1. You are logged into DigiALM\n" +
+      "2. The link opens in the same browser"
+    );
+  }
+}
+</script>
+
 </body>
 </html>

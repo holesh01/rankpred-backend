@@ -700,6 +700,56 @@ def calculate_shift_ranks(path):
         processed += 1
 
     wb.save(path)
+@app.route("/evaluate-html", methods=["POST"])
+def evaluate_exam_from_html():
+    data = request.json
+
+    exam_name = data.get("exam_name")
+    category = data.get("category")
+    gender = data.get("gender")
+    state = data.get("state")
+    html_content = data.get("html")
+
+    if not all([exam_name, category, gender, state, html_content]):
+        return jsonify({"error": "Missing fields"}), 400
+
+    # extract candidate details
+    details = extract_candidate_details(html_content)
+
+    if not details["roll"] or not details["name"]:
+        return jsonify({"error": "Unable to extract candidate details"}), 400
+
+    if not details["exam_date"] or not details["exam_time"]:
+        return jsonify({"error": "Exam date/time not found"}), 400
+
+    shift_id = make_shift_id(details["exam_date"], details["exam_time"])
+
+    scheme = read_marking_scheme(exam_name)
+    subjects = read_subjects(exam_name)
+
+    final_marks, subject_results = parse_response_sectionwise_from_html(
+        html_content, scheme, subjects
+    )
+
+    save_user_result(
+        exam_name,
+        shift_id,
+        [
+            details["name"],
+            details["roll"],
+            category,
+            gender,
+            state,
+            final_marks
+        ],
+        subject_results
+    )
+
+    return jsonify({
+        "status": "saved",
+        "final_marks": final_marks,
+        "roll": details["roll"]
+    })
 
 
 # ---------------- START ----------------

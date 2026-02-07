@@ -3,3 +3,4 @@ flask-cors
 gunicorn
 beautifulsoup4
 openpyxl
+requests

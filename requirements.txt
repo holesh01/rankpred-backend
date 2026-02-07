@@ -2,5 +2,7 @@ Flask
 flask-cors
 gunicorn
 beautifulsoup4
+lxml
 openpyxl
 requests
+reportlab
